@@ -1,14 +1,22 @@
 package pl.onrwir.roomdatabasedemo
 
+import android.app.AlertDialog
+import android.app.Dialog
 import android.os.Bundle
+import android.util.Log
+import android.view.View
 import android.widget.Toast
 import androidx.activity.enableEdgeToEdge
+import androidx.appcompat.R
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.lifecycle.lifecycleScope
+import androidx.recyclerview.widget.LinearLayoutManager
+import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.launch
 import pl.onrwir.roomdatabasedemo.databinding.ActivityMainBinding
+import pl.onrwir.roomdatabasedemo.databinding.DialogUpdateBinding
 
 class MainActivity : AppCompatActivity() {
     private var binding: ActivityMainBinding? = null
@@ -21,8 +29,16 @@ class MainActivity : AppCompatActivity() {
 
         binding?.btnAdd?.setOnClickListener {
             addRecord(employeeDao)
-
         }
+
+        lifecycleScope.launch {
+            employeeDao.fetchAllEmployees().collect{
+                Log.d("exactemployee", "$it")
+                val list = ArrayList(it)
+                setupListOfDataIntoRecyclerView(list, employeeDao)
+            }
+        }
+
 
     }
 
@@ -45,5 +61,113 @@ class MainActivity : AppCompatActivity() {
             ).show()
 
         }
+    }
+
+    private fun setupListOfDataIntoRecyclerView(employeesList:ArrayList<EmployeeEntity>,
+                                                employeeDao: EmployeeDao){
+        if(employeesList.isNotEmpty()){
+            val itemAdapter = ItemAdapter(employeesList,{updateId ->
+                updateRecordDialog(updateId, employeeDao)
+            }){
+                    deleteId ->
+                    lifecycleScope.launch {
+                        employeeDao.fetchEmployeeById(deleteId).collect{
+                            if (it != null) {
+                                deleteRecordDialog(deleteId, employeeDao)
+                            }
+                        }
+                    }
+
+                }
+
+            binding?.rvItemsList?.layoutManager = LinearLayoutManager(this)
+            binding?.rvItemsList?.adapter = itemAdapter
+            binding?.rvItemsList?.visibility = View.VISIBLE
+            binding?.tvNoRecordsAvailable?.visibility = View.GONE
+        }else{
+            binding?.rvItemsList?.visibility = View.GONE
+            binding?.tvNoRecordsAvailable?.visibility = View.VISIBLE
+        }
+
+    }
+
+    private fun updateRecordDialog(id: Int, employeeDao: EmployeeDao) {
+        val updateDialog = Dialog(this, R.style.Theme_AppCompat_Dialog)
+        updateDialog.setCancelable(false)
+        val binding = DialogUpdateBinding.inflate(layoutInflater)
+        updateDialog.setContentView(binding.root)
+
+        lifecycleScope.launch {
+            val employee = employeeDao.fetchEmployeeById(id).firstOrNull()
+            if (employee != null) {
+                binding.etUpdateName.setText(employee.name)
+                binding.etUpdateEmailId.setText(employee.email)
+            }
+        }
+
+        binding.tvUpdate.setOnClickListener {
+            val name = binding.etUpdateName.text.toString()
+            val email = binding.etUpdateEmailId.text.toString()
+
+            if (name.isNotEmpty() && email.isNotEmpty()) {
+                lifecycleScope.launch {
+                    employeeDao.update(EmployeeEntity(id, name, email))
+                    Toast.makeText(
+                        applicationContext,
+                        "Record Updated.",
+                        Toast.LENGTH_LONG
+                    ).show()
+                }
+            } else {
+                Toast.makeText(
+                    applicationContext,
+                    "Name or Email cannot be blank",
+                    Toast.LENGTH_LONG
+                ).show()
+            }
+            updateDialog.dismiss() // Dismiss the dialog after update
+        }
+
+        binding.tvCancel.setOnClickListener {
+            updateDialog.dismiss()
+        }
+
+        updateDialog.show()
+    }
+
+    private fun deleteRecordDialog(id:Int, employeeDao: EmployeeDao){
+        val builder = AlertDialog.Builder(this)
+        builder.setTitle("Delete Record")
+        builder.setIcon(android.R.drawable.ic_dialog_alert)
+
+        lifecycleScope.launch {
+            val employee = employeeDao.fetchEmployeeById(id).firstOrNull()
+                if(employee != null){
+                    builder.setMessage("Are you sure you want to delete ${employee.name}?")
+                }else{
+                    builder.setMessage("Employee not found.")
+                }
+
+        }
+
+        builder.setPositiveButton("Yes"){dialogInterface, _ ->
+            lifecycleScope.launch {
+                employeeDao.delete(EmployeeEntity(id))
+                Toast.makeText(
+                    applicationContext,
+                    "Record deleted successfully.",
+                    Toast.LENGTH_SHORT
+                ).show()
+            }
+            dialogInterface.dismiss()
+        }
+
+        builder.setNegativeButton("No"){dialogInterface, _ ->
+            dialogInterface.dismiss()
+        }
+
+        val alertDialog: AlertDialog = builder.create()
+        alertDialog.setCancelable(false)
+        alertDialog.show()
     }
 }

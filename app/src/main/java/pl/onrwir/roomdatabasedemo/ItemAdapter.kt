@@ -20,7 +20,11 @@ class ItemAdapter(private val items: ArrayList<EmployeeEntity>,
     }
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder {
-        return ViewHolder(ItemRowBinding.inflate(LayoutInflater.from(parent.context),parent,false))
+        return ViewHolder(
+            ItemRowBinding.inflate(
+                LayoutInflater.from(parent.context), parent,false
+            )
+        )
     }
 
     override fun getItemCount(): Int {
@@ -43,10 +47,10 @@ class ItemAdapter(private val items: ArrayList<EmployeeEntity>,
         }
 
         holder.ivEdit.setOnClickListener{
-            updateListener.invoke(item.id)
+            updateListener(item.id)
         }
         holder.ivDelete.setOnClickListener{
-            updateListener.invoke(item.id)
+            deleteListener(item.id)
         }
 
     }
